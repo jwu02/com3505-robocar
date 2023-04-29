@@ -16,19 +16,16 @@
 const char* ssid = "kazdesu";
 const char* password = "password";
 
+bool ledState = 0;
+const int ledPin = LED_BUILTIN;
+
+int leftMotorDirection = FORWARD;
+int rightMotorDirection = FORWARD;
+
+
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
-
-// Create the motor shield object with the default I2C address 0x60
-// https://learn.adafruit.com/adafruit-stepper-dc-motor-featherwing/pinouts#i2c-addressing-1883531
-Adafruit_MotorShield AFMS = Adafruit_MotorShield();
-// Or, create it with a different I2C address (say for stacking)
-// Adafruit_MotorShield AFMS = Adafruit_MotorShield(0x61);
-
-// Select which 'port' M1, M2, M3 or M4
-Adafruit_DCMotor *leftMotor = AFMS.getMotor(3); // 2 and 3
-Adafruit_DCMotor *rightMotor = AFMS.getMotor(4); // 1 and 4
 
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
@@ -106,8 +103,9 @@ const char index_html[] PROGMEM = R"rawliteral(
   </div>
   <div class="content">
     <div class="card">
-      <p><button id="forward-btn" class="button">Forward</button></p>
-      <p><button id="backward-btn" class="button">Backward</button></p>
+      <h2>Output - GPIO 2</h2>
+      <p class="state">state: <span id="state">%STATE%</span></p>
+      <p><button id="button" class="button">Toggle</button></p>
     </div>
   </div>
 <script>
@@ -129,57 +127,43 @@ const char index_html[] PROGMEM = R"rawliteral(
     setTimeout(initWebSocket, 2000);
   }
   function onMessage(event) {
-    
+    var state;
+    if (event.data == "1"){
+      state = "ON";
+    }
+    else{
+      state = "OFF";
+    }
+    document.getElementById('state').innerHTML = state;
   }
   function onLoad(event) {
     initWebSocket();
     initButton();
   }
   function initButton() {
-    document.getElementById('forward-btn').addEventListener('mousedown', function(){
-      websocket.send('forward');
-    });
-    document.getElementById('forward-btn').addEventListener('mouseup', release);
-
-    document.getElementById('backward-btn').addEventListener('mousedown', function(){
-      websocket.send('backward');
-    });
-    document.getElementById('backward-btn').addEventListener('mouseup', release);
+    document.getElementById('button').addEventListener('click', toggle);
   }
-  function relase(){
-    websocket.send('release');
+  function toggle(){
+    websocket.send('toggle');
   }
 </script>
 </body>
 </html>
 )rawliteral";
 
+void notifyClients() {
+  ws.textAll(String(ledState));
+}
+
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
-    AwsFrameInfo *info = (AwsFrameInfo*)arg;
-    if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
-        data[len] = 0;
-        if (strcmp((char*)data, "forward") == 0) {
-            handleRobotMotion(FORWARD, FORWARD, 150);
-        } else if (strcmp((char*)data, "backward") == 0) {
-            handleRobotMotion(BACKWARD, BACKWARD, 150);
-        } else if (strcmp((char*)data, "release") == 0) {
-            handleRelease();
-        }
-        
+  AwsFrameInfo *info = (AwsFrameInfo*)arg;
+  if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
+    data[len] = 0;
+    if (strcmp((char*)data, "toggle") == 0) {
+      ledState = !ledState;
+      notifyClients();
     }
-}
-
-void handleRobotMotion(int leftMotorDirection, int rightMotorDirection, int motorSpeed) {
-    leftMotor->setSpeed(motorSpeed);
-    rightMotor->setSpeed(motorSpeed);
-
-    leftMotor->run(leftMotorDirection);
-    rightMotor->run(rightMotorDirection);
-}
-
-void handleRelease() {
-    leftMotor->run(RELEASE);
-    rightMotor->run(RELEASE);
+  }
 }
 
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
@@ -201,66 +185,53 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
 }
 
 void initWebSocket() {
-    ws.onEvent(onEvent);
-    server.addHandler(&ws);
+  ws.onEvent(onEvent);
+  server.addHandler(&ws);
 }
 
 String processor(const String& var){
-    Serial.println(var);
-    // if(var == "STATE"){
-    //     if (ledState){
-    //         return "ON";
-    //     } else{
-    //         return "OFF";
-    //     }
-    // }
-    return String();
+  Serial.println(var);
+  if(var == "STATE"){
+    if (ledState){
+      return "ON";
+    }
+    else{
+      return "OFF";
+    }
+  }
+  return String();
 }
 
 void setup(){
-    // Serial port for debugging purposes
-    Serial.begin(115200);
+  // Serial port for debugging purposes
+  Serial.begin(115200);
 
-    if (!AFMS.begin()) {         // create with the default frequency 1.6KHz
-    // if (!AFMS.begin(1000)) {  // OR with a different frequency, say 1KHz
-        Serial.println("Could not find Motor Shield. Check wiring.");
-        while (1);
-    }
-    Serial.println("Motor Shield found.");
-
-    // Set the speed to start, from 0 (off) to 255 (max speed)
-    leftMotor->setSpeed(150);
-    leftMotor->run(FORWARD);
-    // RELEASE stops the motor
-    // removes power from the motor and is equivalent to setSpeed(0)
-    leftMotor->run(RELEASE);
-
-    rightMotor->setSpeed(150);
-    rightMotor->run(FORWARD);
-    rightMotor->run(RELEASE);
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
   
-    // Connect to Wi-Fi
-    WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(1000);
-        Serial.println("Connecting to WiFi..");
-    }
+  // Connect to Wi-Fi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi..");
+  }
 
-    // Print ESP Local IP Address
-    Serial.println(WiFi.localIP()); // 172.20.10.7 for my mobile hotspot
+  // Print ESP Local IP Address
+  Serial.println(WiFi.localIP());
 
-    initWebSocket();
+  initWebSocket();
 
-    // Route for root / web page
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send_P(200, "text/html", index_html, processor);
-    });
+  // Route for root / web page
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", index_html, processor);
+  });
 
-    // Start server
-    server.begin();
+  // Start server
+  server.begin();
 }
 
 void loop() {
-    ws.cleanupClients();
-    delay(1); // adding a delay makes actions received from client more responsive
+  ws.cleanupClients();
+  digitalWrite(ledPin, ledState);
+  delay(1);
 }
