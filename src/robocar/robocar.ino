@@ -18,7 +18,7 @@ const char* password = "password";
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
-AsyncWebSocket ws("/ws");
+AsyncWebSocket ws("/robocar_control");
 
 // Create the motor shield object with the default I2C address 0x60
 // https://learn.adafruit.com/adafruit-stepper-dc-motor-featherwing/pinouts#i2c-addressing-1883531
@@ -27,8 +27,8 @@ Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 // Adafruit_MotorShield AFMS = Adafruit_MotorShield(0x61);
 
 // Select which 'port' M1, M2, M3 or M4
-Adafruit_DCMotor *leftMotor = AFMS.getMotor(3); // 2 and 3
-Adafruit_DCMotor *rightMotor = AFMS.getMotor(4); // 1 and 4
+Adafruit_DCMotor *leftMotor = AFMS.getMotor(2); // 2 and 3
+Adafruit_DCMotor *rightMotor = AFMS.getMotor(1); // 1 and 4
 
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
@@ -106,12 +106,29 @@ const char index_html[] PROGMEM = R"rawliteral(
   </div>
   <div class="content">
     <div class="card">
-      <p><button id="forward-btn" class="button">Forward</button></p>
-      <p><button id="backward-btn" class="button">Backward</button></p>
+      <table>
+        <tr>
+          <td></td>
+          <td><button id="forward-btn" class="button">Forward</button></td>
+          <td></td>
+        </tr>
+
+        <tr>
+          <td><button id="left-btn" class="button">Left</button></td>
+          <td></td>
+          <td><button id="right-btn" class="button">Right</button></td>
+        </tr>
+
+        <tr>
+          <td></td>
+          <td><button id="backward-btn" class="button">Backward</button></td>
+          <td></td>
+        </tr>
+      </table>
     </div>
   </div>
 <script>
-  var gateway = `ws://${window.location.hostname}/ws`;
+  var gateway = `ws://${window.location.hostname}/robocar_control`;
   var websocket;
   window.addEventListener('load', onLoad);
   function initWebSocket() {
@@ -139,15 +156,32 @@ const char index_html[] PROGMEM = R"rawliteral(
     document.getElementById('forward-btn').addEventListener('mousedown', function(){
       websocket.send('forward');
     });
-    document.getElementById('forward-btn').addEventListener('mouseup', release);
+    document.getElementById('forward-btn').addEventListener('mouseup', function(){
+      websocket.send('release');
+    });
 
     document.getElementById('backward-btn').addEventListener('mousedown', function(){
       websocket.send('backward');
     });
-    document.getElementById('backward-btn').addEventListener('mouseup', release);
-  }
-  function relase(){
-    websocket.send('release');
+    document.getElementById('backward-btn').addEventListener('mouseup', function(){
+      websocket.send('release');
+    });
+
+    document.getElementById('left-btn').addEventListener('mousedown', function(){
+      websocket.send('left');
+    });
+    document.getElementById('left-btn').addEventListener('mouseup', function(){
+      websocket.send('release');
+    });
+
+    document.getElementById('right-btn').addEventListener('mousedown', function(){
+      websocket.send('right');
+    });
+    document.getElementById('right-btn').addEventListener('mouseup', function(){
+      websocket.send('release');
+    });
+
+
   }
 </script>
 </body>
@@ -158,18 +192,31 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
     AwsFrameInfo *info = (AwsFrameInfo*)arg;
     if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
         data[len] = 0;
-        if (strcmp((char*)data, "forward") == 0) {
-            handleRobotMotion(FORWARD, FORWARD, 150);
-        } else if (strcmp((char*)data, "backward") == 0) {
-            handleRobotMotion(BACKWARD, BACKWARD, 150);
-        } else if (strcmp((char*)data, "release") == 0) {
+        if (strcmp((char*)data, "release") == 0) {
             handleRelease();
+            Serial.println("STOP");
         }
-        
+        if (strcmp((char*)data, "forward") == 0) {
+            handleRobotMotion(FORWARD, FORWARD, 100);
+            Serial.println("FORWARD");
+        }
+        if (strcmp((char*)data, "backward") == 0) {
+            handleRobotMotion(BACKWARD, BACKWARD, 100);
+            Serial.println("BACKWARD");
+        }
+        if (strcmp((char*)data, "left") == 0) {
+            handleRobotMotion(BACKWARD, FORWARD, 100);
+            Serial.println("LEFT");
+        }
+        if (strcmp((char*)data, "right") == 0) {
+            handleRobotMotion(FORWARD, BACKWARD, 100);
+            Serial.println("RIGHT");
+        }
     }
 }
 
 void handleRobotMotion(int leftMotorDirection, int rightMotorDirection, int motorSpeed) {
+  // Set the speed to start, from 0 (off) to 255 (max speed)
     leftMotor->setSpeed(motorSpeed);
     rightMotor->setSpeed(motorSpeed);
 
@@ -178,26 +225,28 @@ void handleRobotMotion(int leftMotorDirection, int rightMotorDirection, int moto
 }
 
 void handleRelease() {
+    // RELEASE stops the motor
+    // removes power from the motor and is equivalent to setSpeed(0)
     leftMotor->run(RELEASE);
     rightMotor->run(RELEASE);
 }
 
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
-             void *arg, uint8_t *data, size_t len) {
-  switch (type) {
-    case WS_EVT_CONNECT:
-      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-      break;
-    case WS_EVT_DISCONNECT:
-      Serial.printf("WebSocket client #%u disconnected\n", client->id());
-      break;
-    case WS_EVT_DATA:
-      handleWebSocketMessage(arg, data, len);
-      break;
-    case WS_EVT_PONG:
-    case WS_EVT_ERROR:
-      break;
-  }
+                void *arg, uint8_t *data, size_t len) {
+    switch (type) {
+        case WS_EVT_CONNECT:
+            Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+            break;
+        case WS_EVT_DISCONNECT:
+            Serial.printf("WebSocket client #%u disconnected\n", client->id());
+            break;
+        case WS_EVT_DATA:
+            handleWebSocketMessage(arg, data, len);
+            break;
+        case WS_EVT_PONG:
+        case WS_EVT_ERROR:
+            break;
+    }
 }
 
 void initWebSocket() {
@@ -228,17 +277,6 @@ void setup(){
     }
     Serial.println("Motor Shield found.");
 
-    // Set the speed to start, from 0 (off) to 255 (max speed)
-    leftMotor->setSpeed(150);
-    leftMotor->run(FORWARD);
-    // RELEASE stops the motor
-    // removes power from the motor and is equivalent to setSpeed(0)
-    leftMotor->run(RELEASE);
-
-    rightMotor->setSpeed(150);
-    rightMotor->run(FORWARD);
-    rightMotor->run(RELEASE);
-  
     // Connect to Wi-Fi
     WiFi.begin(ssid, password);
     while (WiFi.status() != WL_CONNECTED) {
@@ -258,9 +296,13 @@ void setup(){
 
     // Start server
     server.begin();
+
 }
 
 void loop() {
+    // Periodically calling the cleanupClients() function from the main loop(), 
+    // to limit the number of clients by closing the oldest client when the 
+    // maximum number has been exceeded
     ws.cleanupClients();
-    delay(1); // adding a delay makes actions received from client more responsive
+    delay(10); // adding a delay makes actions received from client more responsive
 }

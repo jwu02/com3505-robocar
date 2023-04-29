@@ -10,7 +10,6 @@
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-#include <Adafruit_MotorShield.h>
 
 // Replace with your network credentials
 const char* ssid = "kazdesu";
@@ -18,10 +17,6 @@ const char* password = "password";
 
 bool ledState = 0;
 const int ledPin = LED_BUILTIN;
-
-int leftMotorDirection = FORWARD;
-int rightMotorDirection = FORWARD;
-
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
