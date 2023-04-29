@@ -153,35 +153,21 @@ const char index_html[] PROGMEM = R"rawliteral(
     initButton();
   }
   function initButton() {
-    document.getElementById('forward-btn').addEventListener('mousedown', function(){
-      websocket.send('forward');
-    });
-    document.getElementById('forward-btn').addEventListener('mouseup', function(){
-      websocket.send('release');
-    });
+    ['forward','backward','left','right'].forEach( direction => {
+      document.getElementById(direction+'-btn').addEventListener('mousedown', function(){
+        websocket.send(direction);
+      });
+      document.getElementById(direction+'-btn').addEventListener('mouseup', function(){
+        websocket.send('release');
+      });
 
-    document.getElementById('backward-btn').addEventListener('mousedown', function(){
-      websocket.send('backward');
+      document.getElementById(direction+'-btn').addEventListener('touchstart', function(){
+        websocket.send(direction);
+      });
+      document.getElementById(direction+'-btn').addEventListener('touchend', function(){
+        websocket.send('release');
+      });
     });
-    document.getElementById('backward-btn').addEventListener('mouseup', function(){
-      websocket.send('release');
-    });
-
-    document.getElementById('left-btn').addEventListener('mousedown', function(){
-      websocket.send('left');
-    });
-    document.getElementById('left-btn').addEventListener('mouseup', function(){
-      websocket.send('release');
-    });
-
-    document.getElementById('right-btn').addEventListener('mousedown', function(){
-      websocket.send('right');
-    });
-    document.getElementById('right-btn').addEventListener('mouseup', function(){
-      websocket.send('release');
-    });
-
-
   }
 </script>
 </body>
