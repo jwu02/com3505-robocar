@@ -1,0 +1,76 @@
+# COM3505 Lab Assessment 2
+
+Put your documentation here. 
+
+Put your code in [ProjectThing/ProjectThing.ino](ProjectThing/ProjectThing.ino).
+
+See [the rubric](rubric.mkd) for more details.
+
+
+# ESP32 RoboCar
+
+## Additional Products List
+- ["Mini 3-Layer Round Robot Chassis Kit"](https://www.adafruit.com/product/3244)
+- a LiPo battery for powering the ESP separately, if you want to operate your robot without a wired USB connection (note that ESP32's operating voltage is between 2.2V-3.6V)
+- ["DC Motor + Stepper FeatherWing Add-on For All Feather Boards"](https://www.adafruit.com/product/2927), this is the motor driver
+- ["Stacking Headers for Feather - 12-pin and 16-pin female headers"](https://www.adafruit.com/product/2830) (optional)
+- ["4 x AA Battery Holder with On/Off Switch"](https://www.adafruit.com/product/830), it's recommeneded to have a separate power source for the motor driver, since they usually operate at much higher voltages than the ESP32
+- HC-SR04 Ultrasonic Distance Sensor
+
+## Development Cycle 1
+During this cycle, we aim to produce a robot and an interface, which allows us to request the robot to do very basic functionalities, such as turing left and right, and moving forwards and backwards.
+
+### Robot Chassis Assembly
+The components used to assemble the robot is part of a kit which can be purchased from Adafruit, ["Mini 3-Layer Round Robot Chassis Kit"](https://www.adafruit.com/product/3244). 
+The following sequence of images shows the assembly process.
+
+We first assemble the DC motors with the wheels.
+<p align="center"><img src="documentation_images/assembling_motor_wheel.JPG" width="40%"></p>
+<p align="center"><img src="documentation_images/assembled_motor_wheel.JPG" width="40%"></p>
+
+Then assemble the lower part of the robot.
+<p align="center"><img src="documentation_images/assembling_robot_lower.JPG" width="40%"></p>
+<p align="center"><img src="documentation_images/assembled_robot_lower.JPG" width="40%"></p>
+
+Proceed to assemble the upper part of the robot. We secured the battery holder (filled with batteries each of 1.5V, giving a total of 6V) in the upper compartment, and the LiPo battery in the lower compartment.
+<p align="center"><img src="documentation_images/assembled_robot_upper.JPG" width="40%"></p>
+
+### Circuit Assembly
+In the image below, we soldered the port for powering the motor driver, as well as the 4 ports for the motor connections. One DC motor take up 1 port and one stepper motor take up 2 ports. Since our robot is using two DC motors, we only need two of the ports. We will connect the left motor to the "M2" port and the right motor to the "M1" port. The motors can then be referenced later using the port numbers, with the following code:
+```c++
+#include <Adafruit_MotorShield.h>
+
+// default I2C address is 0x60
+Adafruit_MotorShield AFMS = Adafruit_MotorShield(i2c_address);
+Adafruit_DCMotor *leftMotor = AFMS.getMotor(2);
+Adafruit_DCMotor *rightMotor = AFMS.getMotor(1);
+```
+
+We also soldered stacking header pins onto the featherwing instead of the pins it came provided with. Using stacking headers is totally optional. We only did it to make the featherwing more reusable and easily expandable upon in future projects. For example, if we need more ports/motors, we can easily stack additional featherwings on top. We would need to put some [drop of solder](https://learn.adafruit.com/adafruit-stepper-dc-motor-featherwing/pinouts#i2c-addressing-1883531) on the back of those featherwings, encoding a binary value that gives each of them a unique I2C address.
+<p align="center"><img src="documentation_images/soldered_motor_driver.JPG" width="40%"></p>
+
+The fully assembled robot is shown in the image below. With this we can now program the robot motors to do what we want.
+<p align="center"><img src="documentation_images/connected_robot_circuit.JPG" width="40%"></p>
+
+### Control Interface
+We created a simple control interface to allow the client interface to communicate with the robot control server. This is done via web sockets, which allows the client to establish and maintain a connection with the server, making requests more responsive therefore allowing us to produce more real-time interactions with the robot. The interface can be accessed by connecting to the robot's WiFi access point, which we named "Robocar", then head over to `http://192.168.4.1/` in the browser and you should see the following page.
+<p align="center"><img src="documentation_images/control_interface.jpg" width="40%"></p>
+
+## Development Cycle 2
+For this cycle, we aim to build on top, additional functionalities to allow the robot to perform obstacle avoidance, while exploring its environment. For this purpose we will make use of the HC-SR04 ultrasonic distance sensor.
+
+<p align="center"><img src="documentation_images/ultrasonic_distance_sensor.JPG" width="40%"></p>
+
+It has a ultrasound transmitter (`Trig` pin), which emits a high-frequency sound that travels through the air, bouncing back from any object it finds. The ultrasound receiver (`Echo` pin) then receives the reflected sound, allowing us to determine the duration the sound pulse was in the air for (explanation from [Random Nerd Tutorials](https://randomnerdtutorials.com/esp32-hc-sr04-ultrasonic-arduino)). With that information, we calculate the distance to the obstacle in front, with the following equation:
+
+```
+distance to object = (speed of sound in air * pulse duration in air) / 2
+```
+
+The sensor provides a [theoretical non-contact measurement ranging from 2cm to 4meters](https://components101.com/sensors/ultrasonic-sensor-working-pinout-datasheet). It also has an operating voltage of around 5V, so we constructed a circuit with two resistors to act as potential dividers to obtain the voltage we want, to which we can connect our sensor, in parallel, to. The resistor values does not matter as long as the operating current is less than 15mA. The picture below shows the updated circuit connections with the ultrasonic sensor. The `Trig` and `Echo` pin is connected to pin 5 and 6 of the ESP respectively.
+
+<p align="center"><img src="documentation_images/connected_robot_circuit2.jpg" width="40%"></p>
+
+The circuit diagram below provides more detail to what the connections to the 6V battery holder should now look like and the resistor values used.
+
+<p align="center"><img src="documentation_images/circuit_diagram.jpg" width="40%"></p>
