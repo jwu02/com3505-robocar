@@ -1,12 +1,3 @@
-# COM3505 Lab Assessment 2
-
-Put your documentation here. 
-
-Put your code in [ProjectThing/ProjectThing.ino](ProjectThing/ProjectThing.ino).
-
-See [the rubric](rubric.mkd) for more details.
-
-
 # ESP32 RoboCar
 
 ## Additional Products List
